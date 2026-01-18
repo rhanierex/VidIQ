@@ -10,7 +10,7 @@ import json
 from collections import Counter
 
 # --- 1. CONFIG ---
-st.set_page_config(page_title="YouTube Master V24 PRO", page_icon="🚀", layout="wide")
+st.set_page_config(page_title="VidIQ Clone V1", page_icon="🚀", layout="wide")
 
 # --- 2. DATABASE CONFIG ---
 URL_DATABASE_ONLINE = "https://gist.githubusercontent.com/rhanierex/f2d76f11df8d550376d81b58124d3668/raw/0b58a1eb02a7cffc2261a1c8d353551f3337001c/gistfile1.txt"
@@ -584,7 +584,7 @@ with st.sidebar:
 
 st.markdown("""
 <h1 style='text-align: center;'>
-    🚀 YouTube Master V24 PRO
+    🚀 VidIQ Clone V1
 </h1>
 <p style='text-align: center; color: #888;'>
     Advanced YouTube SEO & Analytics Tool - VidIQ Style
@@ -1089,7 +1089,8 @@ with tab4:
 st.markdown("---")
 st.markdown("""
 <div style='text-align: center; color: #666; padding: 20px;'>
-    <p><strong>YouTube Master V24 PRO</strong> - Advanced SEO & Analytics Tool</p>
-    <p style='font-size: 12px;'>Made with ❤️ | Powered by YouTube Data API v3</p>
+    <p><strong>VidIQ Clone V1</strong> - Advanced SEO & Analytics Tool</p>
+    <p style='font-size: 12px;'>Made with ❤️ | Powered by Sabrani</p>
 </div>
+
 """, unsafe_allow_html=True)
