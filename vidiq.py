@@ -622,7 +622,7 @@ with st.sidebar:
 # --- 8. MAIN APP ---
 st.markdown("""
 <div style='text-align: center; color: white; margin-bottom: 2rem;'>
-    <h1 style='font-size: 3.5rem; font-weight: 800; text-shadow: 2px 2px 10px rgba(0,0,0,0.3);'>🚀 YouTube Master V24 PRO</h1>
+    <h1 style='font-size: 3.5rem; font-weight: 800; text-shadow: 2px 2px 10px rgba(0,0,0,0.3);'>🚀 YouTube VidIQ Clone</h1>
     <p style='color: #ddd; font-size: 1.2rem;'>Advanced YouTube SEO & Analytics Tool</p>
 </div>
 """, unsafe_allow_html=True)
@@ -1336,3 +1336,4 @@ st.markdown("""
     <p style='font-size: 0.8rem; opacity: 0.6;'>Made with ❤️ for Content Creators</p>
 </div>
 """, unsafe_allow_html=True)
+
