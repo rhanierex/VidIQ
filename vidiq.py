@@ -9,6 +9,9 @@ from googleapiclient.discovery import build
 import json
 from collections import Counter
 
+# Note: google-generativeai will be imported dynamically when needed
+# Install with: pip install google-generativeai
+
 # --- 1. CONFIG ---
 st.set_page_config(page_title="YouTube VidIQ Clone", page_icon="🚀", layout="wide")
 
@@ -42,6 +45,14 @@ st.markdown("""
         transform: translateY(-3px);
         box-shadow: 0 6px 20px rgba(0,0,0,0.2);
     }
+    .api-badge {
+        display: inline-block;
+        padding: 0.3rem 0.8rem;
+        border-radius: 15px;
+        font-size: 0.85rem;
+        font-weight: 600;
+        margin: 0.2rem;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -51,19 +62,65 @@ FALLBACK_POWER_WORDS = ["secret", "best", "exposed", "tutorial", "guide", "how t
 VIRAL_EMOJIS = ["🔥", "😱", "🔴", "✅", "❌", "🎵", "⚠️", "⚡", "🚀", "💰", "💯", "🤯", "😭", "😡", "😴", "🌙", "✨", "💤", "🌧️", "🎹", "👀", "💪", "🎯", "⭐", "🏆"]
 STOP_WORDS = {"the", "and", "or", "for", "to", "in", "on", "at", "by", "with", "a", "an", "is", "it", "of", "that", "this", "video", "i", "you", "me", "we", "my", "your"}
 
-# --- 4. LOAD DATA ---
+# --- 4. GEMINI API INTEGRATION ---
+@st.cache_data(ttl=3600)  # Cache for 1 hour
+def get_power_words_from_gemini(api_key, niche="general"):
+    """
+    Get trending power words from Gemini API based on niche
+    """
+    if not api_key or len(api_key) < 30:
+        return None, "Invalid API Key"
+    
+    try:
+        import google.generativeai as genai
+        
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel('gemini-pro')
+        
+        prompt = f"""Generate 30 powerful, high-CTR words for YouTube video titles in the {niche} niche.
+        
+Requirements:
+- Words must be proven to increase click-through rates
+- Include a mix of: urgency words, power words, emotional triggers
+- Format: Return ONLY a JSON array of strings
+- No explanations, just the array
+
+Example format: ["ULTIMATE", "SECRET", "EXPOSED", "PROVEN", "SHOCKING"]
+
+Generate 30 words now:"""
+        
+        response = model.generate_content(prompt)
+        text = response.text.strip()
+        
+        # Extract JSON array
+        import json
+        # Remove markdown code blocks if present
+        text = text.replace('```json', '').replace('```', '').strip()
+        
+        words = json.loads(text)
+        
+        if isinstance(words, list) and len(words) > 0:
+            return words, "🟢 Gemini AI"
+        else:
+            return None, "Invalid response"
+            
+    except Exception as e:
+        return None, f"Error: {str(e)}"
+
 @st.cache_data(ttl=600) 
 def load_power_words(url):
+    """Load power words from GitHub Gist"""
     try:
         response = requests.get(url, timeout=5)
         if response.status_code == 200:
             data = response.json()
             if isinstance(data, list) and len(data) > 0: 
-                return data, "🟢 Online"
+                return data, "🟢 GitHub Online"
     except:
         pass
-    return FALLBACK_POWER_WORDS, "🟠 Offline"
+    return FALLBACK_POWER_WORDS, "🟠 Offline Fallback"
 
+# Initialize power words database
 POWER_WORDS_DB, db_status = load_power_words(URL_DATABASE_ONLINE)
 
 # --- 5. HELPER FUNCTIONS ---
@@ -234,6 +291,12 @@ def generate_smart_suggestions(original_title, keyword, api_key=None, competitor
     suggestions = []
     year = datetime.datetime.now().year
     
+    # Get current power words (from Gemini AI or default)
+    if 'power_words' in st.session_state:
+        power_words_list = st.session_state['power_words']
+    else:
+        power_words_list = POWER_WORDS_DB
+    
     # Extract the ACTUAL theme from the original title
     theme = extract_core_theme(original_title, keyword)
     
@@ -246,7 +309,7 @@ def generate_smart_suggestions(original_title, keyword, api_key=None, competitor
             theme = "Complete Guide"
     
     # Analyze competitor patterns
-    power_word = random.choice(POWER_WORDS_DB).upper()
+    power_word = random.choice(power_words_list).upper()
     number = random.choice(['5', '7', '10'])
     emoji = random.choice(VIRAL_EMOJIS)
     
@@ -259,7 +322,7 @@ def generate_smart_suggestions(original_title, keyword, api_key=None, competitor
             number = numbers[0]
         
         # Find power words in competitor titles
-        for word in POWER_WORDS_DB:
+        for word in power_words_list:
             if word.lower() in top_title.lower():
                 power_word = word.upper()
                 break
@@ -314,6 +377,12 @@ def analyze_title(title, keyword=""):
     score = 0
     checks = []
     
+    # Get current power words
+    if 'power_words' in st.session_state:
+        power_words_list = st.session_state['power_words']
+    else:
+        power_words_list = POWER_WORDS_DB
+    
     if not title:
         return 0, [("error", "Title is empty")]
     
@@ -357,8 +426,8 @@ def analyze_title(title, keyword=""):
     else:
         score += 20
     
-    # 3. Power Words (15 points)
-    found_power = [pw for pw in POWER_WORDS_DB if pw.lower() in title.lower()]
+    # 3. Power Words (15 points) - Using current database
+    found_power = [pw for pw in power_words_list if pw.lower() in title.lower()]
     if found_power:
         score += 15
         checks.append(("success", f"✅ Power Words: {', '.join(found_power[:2])}"))
@@ -590,34 +659,125 @@ def draw_competitor_chart(df):
 with st.sidebar:
     st.markdown("## ⚙️ Settings")
     
-    if "Online" in db_status:
+    # Display current database status
+    if "Gemini" in st.session_state.get('db_source', ''):
+        st.success(st.session_state.get('db_source', db_status))
+    elif "GitHub" in db_status:
         st.success(db_status)
     else:
         st.warning(db_status)
     
     st.divider()
     
+    # === GEMINI API SECTION ===
+    st.markdown("### 🤖 Gemini AI (Optional)")
+    gemini_key = st.text_input("Gemini API Key:", type="password", placeholder="AIzaSy...", key="gemini_key")
+    
+    if gemini_key and len(gemini_key) > 30:
+        st.success("🟢 Gemini Connected")
+        
+        # Niche selector for AI power words
+        niche_option = st.selectbox(
+            "AI Power Words Niche:",
+            ["general", "gaming", "tech", "cooking", "music", "fitness", "education", "entertainment", "business", "lifestyle"],
+            help="Generate power words specific to your niche"
+        )
+        
+        if st.button("🚀 Generate AI Power Words", use_container_width=True):
+            with st.spinner("🤖 Asking Gemini for trending power words..."):
+                ai_words, ai_status = get_power_words_from_gemini(gemini_key, niche_option)
+                
+                if ai_words:
+                    # Update session state
+                    st.session_state['power_words'] = ai_words
+                    st.session_state['db_source'] = f"🤖 Gemini AI ({niche_option})"
+                    st.success(f"✅ Loaded {len(ai_words)} AI power words!")
+                    st.rerun()
+                else:
+                    st.error(f"❌ {ai_status}")
+    elif gemini_key:
+        st.warning("⚠️ Key too short")
+    else:
+        st.info("💡 Add Gemini API for AI-powered words")
+    
+    with st.expander("📖 Get Gemini API Key"):
+        st.markdown("""
+        1. Visit [Google AI Studio](https://makersuite.google.com/app/apikey)
+        2. Click "Create API Key"
+        3. Copy the key
+        4. Paste above ↑
+        
+        **Benefits:**
+        - AI-generated power words
+        - Niche-specific recommendations
+        - Always up-to-date trends
+        - Free tier: 60 requests/minute
+        """)
+    
+    st.divider()
+    
+    # === YOUTUBE API SECTION ===
     st.markdown("### 🔑 YouTube API")
-    api_key = st.text_input("API Key:", type="password", placeholder="AIzaSy...")
+    api_key = st.text_input("YouTube API Key:", type="password", placeholder="AIzaSy...", key="yt_key")
     
     if api_key and len(api_key) > 30:
-        st.success("🟢 Connected")
+        st.success("🟢 YouTube Connected")
     elif api_key:
         st.warning("⚠️ Key too short")
     
-    with st.expander("📖 Get API Key"):
+    with st.expander("📖 Get YouTube API Key"):
         st.markdown("""
         1. Visit [Google Cloud Console](https://console.cloud.google.com)
         2. Create new project
         3. Enable YouTube Data API v3
         4. Create credentials (API Key)
         5. Copy & paste above
+        
+        **Free Quota:** 10,000 units/day
         """)
     
     st.divider()
-    st.markdown("### 📊 Stats")
-    st.metric("Power Words", len(POWER_WORDS_DB))
+    
+    # === STATS ===
+    st.markdown("### 📊 Database Stats")
+    
+    # Get current power words source
+    if 'power_words' in st.session_state:
+        current_words = st.session_state['power_words']
+        source = st.session_state.get('db_source', 'Custom')
+    else:
+        current_words = POWER_WORDS_DB
+        source = db_status
+    
+    st.metric("Power Words", len(current_words))
     st.metric("Viral Emojis", len(VIRAL_EMOJIS))
+    
+    # Display source badge
+    if "Gemini" in source:
+        st.markdown('<span class="api-badge" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">🤖 AI-Powered</span>', unsafe_allow_html=True)
+    elif "GitHub" in source:
+        st.markdown('<span class="api-badge" style="background: #10b981; color: white;">🌐 Online DB</span>', unsafe_allow_html=True)
+    else:
+        st.markdown('<span class="api-badge" style="background: #f59e0b; color: white;">💾 Offline DB</span>', unsafe_allow_html=True)
+    
+    st.divider()
+    
+    # === QUICK ACTIONS ===
+    st.markdown("### ⚡ Quick Actions")
+    
+    if st.button("🔄 Reset to Default", use_container_width=True):
+        if 'power_words' in st.session_state:
+            del st.session_state['power_words']
+        if 'db_source' in st.session_state:
+            del st.session_state['db_source']
+        st.rerun()
+    
+    if 'power_words' in st.session_state:
+        with st.expander("👁️ View Current Power Words"):
+            words_preview = st.session_state['power_words'][:20]
+            st.write(", ".join(words_preview))
+            if len(st.session_state['power_words']) > 20:
+                st.caption(f"...and {len(st.session_state['power_words']) - 20} more")
 
 # --- 8. MAIN APP ---
 st.markdown("""
@@ -1336,4 +1496,3 @@ st.markdown("""
     <p style='font-size: 0.8rem; opacity: 0.6;'>Made with ❤️ for Content Creators</p>
 </div>
 """, unsafe_allow_html=True)
-
